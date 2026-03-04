@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}処理状況 - Session Digest{% endblock %}
+
+{% block content %}
+<div class="job-section">
+    <h2>{{ job.filename }}</h2>
+
+    <div id="progress-section" class="progress-section">
+        <div class="progress-bar-container">
+            <div class="progress-bar" id="progress-bar" style="width: {{ job.progress }}%"></div>
+        </div>
+        <div class="progress-info">
+            <span id="progress-text">{{ job.progress }}%</span>
+            <span id="status-text">{{ job.current_step }}</span>
+        </div>
+    </div>
+
+    <div id="error-section" class="error-section" style="display:none;">
+        <h3>エラーが発生しました</h3>
+        <p id="error-message"></p>
+    </div>
+
+    <div id="results-section" class="results-section" style="display:none;">
+        <div class="tabs">
+            {% for key, label in doc_types.items() %}
+            <button class="tab-btn {% if loop.first %}active{% endif %}" data-tab="{{ key }}">{{ label }}</button>
+            {% endfor %}
+        </div>
+        {% for key, label in doc_types.items() %}
+        <div class="tab-content {% if loop.first %}active{% endif %}" id="tab-{{ key }}">
+            <div class="tab-actions">
+                <a href="/api/jobs/{{ job.id }}/download/{{ key }}" class="btn btn-download" id="download-{{ key }}">ダウンロード</a>
+                <button class="btn btn-regen" onclick="regenerate('{{ key }}')">再生成</button>
+            </div>
+            <div class="doc-preview" id="preview-{{ key }}">
+                <p class="loading">読み込み中...</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+const jobId = "{{ job.id }}";
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+});
+
+// SSE connection
+const evtSource = new EventSource(`/api/jobs/${jobId}/events`);
+
+evtSource.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'progress') {
+        const bar = document.getElementById('progress-bar');
+        const text = document.getElementById('progress-text');
+        const status = document.getElementById('status-text');
+
+        if (data.progress >= 0) {
+            bar.style.width = data.progress + '%';
+            text.textContent = data.progress + '%';
+        }
+        status.textContent = data.message || '';
+
+        if (data.status === 'completed') {
+            evtSource.close();
+            document.getElementById('progress-section').style.display = 'none';
+            document.getElementById('results-section').style.display = 'block';
+            loadResults();
+        } else if (data.status === 'failed') {
+            evtSource.close();
+            document.getElementById('progress-section').style.display = 'none';
+            document.getElementById('error-section').style.display = 'block';
+            document.getElementById('error-message').textContent = data.message;
+        }
+    }
+
+    if (data.type === 'regenerated') {
+        loadDocumentPreview(data.doc_type);
+    }
+};
+
+evtSource.onerror = function() {
+    // Check if job is already completed
+    fetch(`/api/jobs/${jobId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'completed') {
+                evtSource.close();
+                document.getElementById('progress-section').style.display = 'none';
+                document.getElementById('results-section').style.display = 'block';
+                loadResults();
+            }
+        });
+};
+
+function loadResults() {
+    const docTypes = {{ doc_types.keys()|list|tojson }};
+    docTypes.forEach(dt => loadDocumentPreview(dt));
+}
+
+function loadDocumentPreview(docType) {
+    fetch(`/api/jobs/${jobId}/download/${docType}`)
+        .then(r => {
+            if (!r.ok) throw new Error('not available');
+            return r.text();
+        })
+        .then(text => {
+            const el = document.getElementById('preview-' + docType);
+            el.innerHTML = '<pre class="doc-text">' + escapeHtml(text) + '</pre>';
+        })
+        .catch(() => {
+            const el = document.getElementById('preview-' + docType);
+            el.innerHTML = '<p class="error-text">生成に失敗しました。再生成ボタンをお試しください。</p>';
+        });
+}
+
+function regenerate(docType) {
+    fetch(`/api/jobs/${jobId}/regenerate/${docType}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(() => {
+            const el = document.getElementById('preview-' + docType);
+            el.innerHTML = '<p class="loading">再生成中...</p>';
+        });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// If already completed, show results immediately
+{% if job.status.value == 'completed' %}
+document.getElementById('progress-section').style.display = 'none';
+document.getElementById('results-section').style.display = 'block';
+loadResults();
+{% elif job.status.value == 'failed' %}
+document.getElementById('progress-section').style.display = 'none';
+document.getElementById('error-section').style.display = 'block';
+document.getElementById('error-message').textContent = "{{ job.error or 'Unknown error' }}";
+{% endif %}
+</script>
+{% endblock %}

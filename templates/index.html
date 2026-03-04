@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="upload-section">
+    <h2>音声ファイルをアップロード</h2>
+    <form action="/api/upload" method="post" enctype="multipart/form-data" id="upload-form">
+        <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone-content">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p>ファイルをドラッグ＆ドロップ<br>またはクリックして選択</p>
+                <p class="file-types">対応形式: MP3, M4A, WAV, WebM, MP4</p>
+            </div>
+            <input type="file" name="file" id="file-input" accept=".mp3,.m4a,.wav,.webm,.mp4" required>
+        </div>
+        <div id="file-info" class="file-info" style="display:none;">
+            <span id="file-name"></span>
+            <span id="file-size"></span>
+        </div>
+        <button type="submit" id="submit-btn" disabled>処理を開始</button>
+    </form>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const submitBtn = document.getElementById('submit-btn');
+const fileInfo = document.getElementById('file-info');
+const fileName = document.getElementById('file-name');
+const fileSize = document.getElementById('file-size');
+const form = document.getElementById('upload-form');
+
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        updateFileInfo(e.dataTransfer.files[0]);
+    }
+});
+
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) {
+        updateFileInfo(fileInput.files[0]);
+    }
+});
+
+function updateFileInfo(file) {
+    fileName.textContent = file.name;
+    const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    fileSize.textContent = `(${sizeMB} MB)`;
+    fileInfo.style.display = 'flex';
+    submitBtn.disabled = false;
+}
+
+form.addEventListener('submit', () => {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'アップロード中...';
+});
+</script>
+{% endblock %}
