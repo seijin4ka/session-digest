@@ -182,6 +182,25 @@ button[type="submit"]:disabled {
     color: #86868b;
 }
 
+/* Warning */
+.warning-section {
+    padding: 1rem 1.5rem;
+    background: #fff8e6;
+    border-radius: 8px;
+    border-left: 4px solid #f0a500;
+    margin-bottom: 1rem;
+}
+
+.warning-section p {
+    color: #8a6d00;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.warning-section p:last-child {
+    margin-bottom: 0;
+}
+
 /* Error */
 .error-section {
     padding: 1.5rem;

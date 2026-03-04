@@ -6,10 +6,20 @@ from openai import AsyncOpenAI
 
 from pipeline.audio_splitter import split_audio
 from pipeline.document_generator import generate_all
+from pipeline.silence_detector import (
+    analyze_chunks,
+    assess_overall_quality,
+    check_hallucination,
+)
 from pipeline.transcriber import transcribe_all
 from pipeline.transcript_merger import format_transcript, merge_transcripts
 from storage.file_manager import FileManager
 from storage.job_store import JobStatus, JobStore
+
+
+class SilentAudioError(Exception):
+    """全チャンクが無音またはハルシネーションと判定された場合のエラー。"""
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +37,23 @@ async def run_pipeline(
         await _update(job_store, job_id, JobStatus.SPLITTING, 0, "音声ファイルを分割中...")
         chunks_dir = file_manager.get_chunks_dir(job_id)
         chunks = await split_audio(file_path, chunks_dir)
+
+        # Step 1.5: Analyze audio levels
+        await _update(job_store, job_id, JobStatus.SPLITTING, 3, "音声レベルを解析中...")
+        analyses = await analyze_chunks(chunks)
+        silent_indices = {a.index for a in analyses if a.is_silent}
+
+        if silent_indices:
+            if len(silent_indices) == len(chunks):
+                raise SilentAudioError(
+                    "音声が検出されませんでした。無音または作業音のみのファイルは処理できません。"
+                )
+            logger.info(f"Silent chunks detected: {sorted(silent_indices)}")
+            await _warn(
+                job_store, job_id,
+                f"{len(silent_indices)}/{len(chunks)} チャンクで音声が検出されませんでした。有効な部分のみ処理します。"
+            )
+
         await _update(job_store, job_id, JobStatus.SPLITTING, 5, f"{len(chunks)}個のチャンクに分割完了")
 
         # Step 2: Transcribe (5-75%)
@@ -41,7 +68,33 @@ async def run_pipeline(
                 f"文字起こし中... ({done}/{total})"
             )
 
-        results = await transcribe_all(client, chunks, on_progress=on_transcribe_progress)
+        results = await transcribe_all(
+            client, chunks, on_progress=on_transcribe_progress, skip_indices=silent_indices
+        )
+
+        # Step 2.5: Hallucination check
+        await _update(job_store, job_id, JobStatus.TRANSCRIBING, 74, "ハルシネーションチェック中...")
+        hallucination_results = [check_hallucination(r) for r in results]
+        invalid_indices, all_invalid = assess_overall_quality(analyses, hallucination_results)
+
+        # Mark hallucinated results
+        for i, hr in enumerate(hallucination_results):
+            if hr.is_hallucinated:
+                logger.warning(f"Chunk {i} hallucination detected: {hr.reason}")
+                results[i]["hallucinated"] = True
+                results[i]["hallucination_reason"] = hr.reason
+
+        if all_invalid:
+            raise SilentAudioError(
+                "有効な音声コンテンツが検出されませんでした。無音、作業音のみ、またはWhisperのハルシネーションが検出されました。"
+            )
+
+        hallucinated_count = sum(1 for hr in hallucination_results if hr.is_hallucinated)
+        if hallucinated_count > 0:
+            await _warn(
+                job_store, job_id,
+                f"{hallucinated_count}個のチャンクでハルシネーション（架空テキスト）を検出しました。該当部分を除外して処理します。"
+            )
 
         # Step 3: Merge transcripts (75-80%)
         await _update(job_store, job_id, JobStatus.MERGING, 75, "トランスクリプトを結合中...")
@@ -128,5 +181,12 @@ async def _update(
         "type": "progress",
         "status": status.value,
         "progress": progress,
+        "message": message,
+    })
+
+
+async def _warn(job_store: JobStore, job_id: str, message: str) -> None:
+    await job_store.notify(job_id, {
+        "type": "warning",
         "message": message,
     })

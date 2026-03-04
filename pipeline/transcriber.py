@@ -29,11 +29,20 @@ async def transcribe_all(
     client: AsyncOpenAI,
     chunks: list[Path],
     on_progress: Callback | None = None,
+    skip_indices: set[int] | None = None,
 ) -> list[dict]:
     semaphore = asyncio.Semaphore(5)
     results: list[dict | None] = [None] * len(chunks)
 
     async def _process(index: int, chunk_path: Path):
+        if skip_indices and index in skip_indices:
+            logger.info(f"Skipping silent chunk {chunk_path.name}")
+            results[index] = {"segments": [], "text": "", "skipped": True}
+            done = sum(1 for r in results if r is not None)
+            if on_progress:
+                await on_progress(done, len(chunks))
+            return
+
         async with semaphore:
             try:
                 result = await transcribe_chunk(client, chunk_path)

@@ -19,6 +19,9 @@ def merge_transcripts(
     all_segments: list[Segment] = []
 
     for chunk_index, result in enumerate(results):
+        if result.get("skipped") or result.get("hallucinated"):
+            continue
+
         if result.get("error"):
             offset = chunk_index * chunk_duration
             all_segments.append(Segment(
