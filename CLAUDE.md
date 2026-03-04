@@ -1,46 +1,46 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは Claude Code (claude.ai/code) がこのリポジトリで作業する際のガイドです。
 
-## Build & Run
+## ビルド・実行
 
 ```bash
-# Docker (recommended)
+# Docker（推奨）
 docker compose up --build        # http://localhost:8000
 
-# Local development (requires ffmpeg installed)
+# ローカル開発（ffmpeg が必要）
 pip install -r requirements.txt
 OPENAI_API_KEY=sk-... python main.py
 ```
 
-Environment: `.env` with `OPENAI_API_KEY` only (loaded via python-dotenv).
+環境変数: `.env` に `OPENAI_API_KEY` のみ（python-dotenv で読み込み）。
 
-## Architecture
+## アーキテクチャ
 
-Single-process FastAPI app that runs an async audio processing pipeline:
+シングルプロセスの FastAPI アプリで、非同期の音声処理パイプラインを実行する:
 
 ```
-Upload → FFmpeg Split → Whisper API → Merge → GPT-4o Generate → Download
+アップロード → FFmpeg分割 → Whisper API → 結合 → GPT-4o生成 → ダウンロード
 ```
 
-**Two layers:**
-- `pipeline/` - Processing stages, each an async module. `orchestrator.py` chains them and publishes progress events.
-- `storage/` - In-memory job state (`dict`) and temp file management under `/tmp/session-digest/{jobId}/`.
+**2つのレイヤー:**
+- `pipeline/` - 処理ステージ群。各モジュールは非同期。`orchestrator.py` がチェーンして進捗イベントを発行する。
+- `storage/` - インメモリのジョブ状態（`dict`）と `/tmp/session-digest/{jobId}/` 配下の一時ファイル管理。
 
-**Pipeline flow (`orchestrator.run_pipeline`):**
-1. `audio_splitter` - FFmpeg splits into 10min chunks with 30s overlap (mono, 16kHz, 64kbps)
-2. `transcriber` - Whisper API with `asyncio.Semaphore(5)`, 3 retries. Failed chunks become placeholders.
-3. `transcript_merger` - Deduplicates overlap regions by timestamp offset, produces timestamped text.
-4. `document_generator` - GPT-4o generates 3 document types in parallel from prompt templates in `prompts/`.
+**パイプラインの流れ（`orchestrator.run_pipeline`）:**
+1. `audio_splitter` - FFmpeg で10分チャンクに分割、30秒オーバーラップ（モノラル, 16kHz, 64kbps）
+2. `transcriber` - Whisper API、`asyncio.Semaphore(5)` で並列度制限、3回リトライ。失敗チャンクはプレースホルダーに置換。
+3. `transcript_merger` - タイムスタンプオフセットでオーバーラップ区間を重複除去し、タイムスタンプ付きテキストを生成。
+4. `document_generator` - GPT-4o で `prompts/` のテンプレートから3種類のドキュメントを並列生成。
 
-**Real-time progress:** SSE via `StreamingResponse`. `JobStore` uses pub/sub (`asyncio.Queue`) to push events. Progress is weighted: split 0-5%, transcribe 5-75%, merge 75-80%, generate 80-98%.
+**リアルタイム進捗:** `StreamingResponse` による SSE。`JobStore` が pub/sub（`asyncio.Queue`）でイベントを配信。進捗配分: 分割 0-5%, 文字起こし 5-75%, 結合 75-80%, 生成 80-98%。
 
-**Frontend:** Jinja2 templates + vanilla JS + htmx. `index.html` handles drag-drop upload, `job.html` connects to SSE and renders results in tabs.
+**フロントエンド:** Jinja2テンプレート + vanilla JS + htmx。`index.html` がドラッグ&ドロップアップロード、`job.html` が SSE 接続とタブ切替で結果表示。
 
-## Key Conventions
+## 主要な設計方針
 
-- All I/O is async (aiofiles, AsyncOpenAI, asyncio.create_subprocess_exec)
-- Retry via `tenacity` with exponential backoff on all OpenAI calls
-- Pipeline never stops on partial failure: failed transcription chunks insert error placeholders, failed document generation is individually retryable via `/api/jobs/{id}/regenerate/{doc_type}`
-- Prompt templates live in `prompts/*.md` with `{transcript}` placeholder
-- Temp files: chunks deleted after merge, entire job dir auto-deleted after 24h
+- すべてのI/Oは非同期（aiofiles, AsyncOpenAI, asyncio.create_subprocess_exec）
+- OpenAI API呼び出しには `tenacity` による指数バックオフリトライを適用
+- 部分的な失敗でパイプラインを止めない: 文字起こし失敗チャンクはエラープレースホルダーを挿入、ドキュメント生成失敗は `/api/jobs/{id}/regenerate/{doc_type}` で個別再生成可能
+- プロンプトテンプレートは `prompts/*.md` に配置、`{transcript}` プレースホルダーで書き起こしテキストを挿入
+- 一時ファイル: チャンクは結合後に即削除、ジョブディレクトリ全体は24時間後に自動削除
