@@ -13,7 +13,7 @@ pip install -r requirements.txt
 OPENAI_API_KEY=sk-... python main.py
 ```
 
-環境変数: `.env` に `OPENAI_API_KEY` のみ（python-dotenv で読み込み）。テストやリンターは未導入。
+環境変数: `.env` に `OPENAI_API_KEY` のみ（python-dotenv で読み込み）。リンター: `ruff check .` + `ruff format --check .`（CI で自動実行）。
 
 ## アーキテクチャ
 
@@ -43,7 +43,7 @@ OPENAI_API_KEY=sk-... python main.py
 
 **リアルタイム進捗:** `StreamingResponse` による SSE。`JobStore` が pub/sub（`asyncio.Queue`）でイベントを配信。イベントタイプ: `progress`（進捗）、`warning`（警告バナー）、`regenerated`（再生成完了）。進捗配分: 分割 0-5%, 文字起こし 5-75%, 結合 75-80%, 生成 80-98%。
 
-**フロントエンド:** Jinja2テンプレート + vanilla JS + htmx。`index.html` がドラッグ&ドロップアップロード、`job.html` が SSE 接続とタブ切替で結果表示、`jobs.html` がジョブ一覧をカード形式で表示。
+**フロントエンド:** Jinja2テンプレート + vanilla JS。`index.html` がドラッグ&ドロップアップロード、`job.html` が SSE 接続とタブ切替で結果表示、`jobs.html` がジョブ一覧をカード形式で表示。JS内の変数埋め込みは `tojson` フィルタで XSS 対策済み。
 
 ## 主要な設計方針
 
@@ -51,8 +51,17 @@ OPENAI_API_KEY=sk-... python main.py
 - OpenAI API呼び出しには `tenacity` による指数バックオフリトライを適用
 - 部分的な失敗でパイプラインを止めない: 文字起こし失敗チャンクはエラープレースホルダーを挿入、ドキュメント生成失敗は `/api/jobs/{id}/regenerate/{doc_type}` で個別再生成可能
 - Whisper APIの言語指定なし（自動検出）: 英語スピーカー+日本語通訳などの多言語音声に対応
-- プロンプトテンプレートは `prompts/*.md` に配置、`{transcript}` プレースホルダーで書き起こしテキストを挿入
-- 一時ファイル: チャンクは結合後に即削除、ジョブディレクトリ全体は24時間後に自動削除
+- プロンプトテンプレートは `prompts/*.md` に配置、`{transcript}` プレースホルダーで書き起こしテキストを挿入。`<transcript>` タグで囲みプロンプトインジェクション対策済み
+- 一時ファイル: チャンクは結合後に即削除、ジョブディレクトリ全体は24時間後に自動削除（ジョブ状態もメモリから同時削除）
+
+## セキュリティ
+
+- アップロード: ファイル拡張子バリデーション（`.mp3`, `.m4a`, `.wav`, `.webm`, `.mp4`, `.ogg`, `.flac`, `.aac`）+ 2GB サイズ制限
+- パストラバーサル防止: `Path(filename).name` でサニタイズ、`doc_type` は `DOCUMENT_TYPES` に限定
+- XSS対策: Jinja2 autoescaping + JS埋め込みに `tojson` フィルタ使用
+- Docker: 非rootユーザー(appuser)で実行、`.dockerignore` で `.env` 除外
+- エラーメッセージ: 内部例外の詳細はクライアントに送信しない（サーバーログのみ）
+- `asyncio.create_task()` のタスク参照を `set` で保持しGC回収を防止
 
 ## APIエンドポイント
 

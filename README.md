@@ -62,14 +62,14 @@ python main.py
 
 ## 対応フォーマット
 
-MP3, M4A, WAV, WebM, MP4
+MP3, M4A, WAV, WebM, MP4, OGG, FLAC, AAC
 
 ## 技術スタック
 
 | レイヤー | 技術 |
 |---------|------|
 | バックエンド | Python, FastAPI, uvicorn |
-| フロントエンド | Jinja2, htmx, vanilla JS |
+| フロントエンド | Jinja2, vanilla JS |
 | 文字起こし | OpenAI Whisper API（言語自動検出） |
 | ドキュメント生成 | OpenAI GPT-4o |
 | 音声処理 | FFmpeg |
