@@ -132,6 +132,8 @@ function renderApiKeyUI(data) {
 function updateSubmitButton() {
     if (!hasApiKey) {
         submitBtn.disabled = true;
+    } else if (fileInput.files.length > 0) {
+        submitBtn.disabled = false;
     }
 }
 
