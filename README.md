@@ -1,5 +1,11 @@
 # Session Digest
 
+[![CI](https://github.com/seijin4ka/session-digest/actions/workflows/ci.yml/badge.svg)](https://github.com/seijin4ka/session-digest/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)](https://www.docker.com/)
+[![Issues](https://img.shields.io/github/issues/seijin4ka/session-digest)](https://github.com/seijin4ka/session-digest/issues)
+
 長時間セミナーの録音ファイルをアップロードするだけで、AIが自動的に以下の3種類のドキュメントを生成するWebアプリです。
 
 - **構造化ノート** - トピックごとに整理されたタイムスタンプ付きノート
@@ -7,6 +13,8 @@
 - **ハンズオン手順書** - セミナーの実習内容を再現可能なステップバイステップ手順書に変換
 
 4時間超のハンズオンセミナーにも対応。英語スピーカー+日本語通訳などの多言語音声も自動検出して処理します。
+
+![Session Digest スクリーンショット](screen.png)
 
 ## 仕組み
 
