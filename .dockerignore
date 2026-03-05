@@ -1,11 +1,8 @@
 .env
+.git/
 __pycache__/
 *.pyc
 .venv/
+.github/
 .DS_Store
 *.log
-*.egg-info/
-dist/
-build/
-.idea/
-.vscode/

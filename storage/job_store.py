@@ -67,5 +67,9 @@ class JobStore:
         if job_id in self._subscribers:
             self._subscribers[job_id] = [q for q in self._subscribers[job_id] if q is not queue]
 
+    def remove_job(self, job_id: str) -> None:
+        self._jobs.pop(job_id, None)
+        self._subscribers.pop(job_id, None)
+
     def list_jobs(self) -> list[Job]:
         return list(self._jobs.values())

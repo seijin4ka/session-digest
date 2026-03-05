@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+import aiofiles
 from openai import AsyncOpenAI
 
 from pipeline.audio_splitter import split_audio
@@ -117,7 +118,8 @@ async def run_pipeline(
         # Save raw transcript
         output_dir = file_manager.get_output_dir(job_id)
         raw_path = output_dir / "raw_transcript.md"
-        raw_path.write_text(transcript, encoding="utf-8")
+        async with aiofiles.open(raw_path, "w", encoding="utf-8") as f:
+            await f.write(transcript)
 
         await _update(job_store, job_id, JobStatus.MERGING, 80, "トランスクリプト結合完了")
 
@@ -129,7 +131,8 @@ async def run_pipeline(
         for doc_type, content in documents.items():
             if content is not None and not doc_type.endswith("_error"):
                 doc_path = output_dir / f"{doc_type}.md"
-                doc_path.write_text(content, encoding="utf-8")
+                async with aiofiles.open(doc_path, "w", encoding="utf-8") as f:
+                    await f.write(content)
 
         await _update(job_store, job_id, JobStatus.GENERATING, 98, "ドキュメント生成完了")
 
@@ -139,12 +142,12 @@ async def run_pipeline(
 
         # Cleanup chunks
         file_manager.cleanup_chunks(job_id)
-        file_manager.schedule_cleanup(job_id)
+        file_manager.schedule_cleanup(job_id, job_store=job_store)
 
     except Exception as e:
         logger.exception(f"Pipeline failed for job {job_id}")
         job_store.update_job(job_id, error=str(e))
-        await _update(job_store, job_id, JobStatus.FAILED, -1, f"エラー: {e}")
+        await _update(job_store, job_id, JobStatus.FAILED, -1, "処理中にエラーが発生しました")
 
 
 async def regenerate_document(
@@ -160,14 +163,17 @@ async def regenerate_document(
     raw_path = output_dir / "raw_transcript.md"
 
     if not raw_path.exists():
-        raise FileNotFoundError("Raw transcript not found")
+        logger.error(f"Raw transcript not found for job {job_id}")
+        return
 
-    transcript = raw_path.read_text(encoding="utf-8")
+    async with aiofiles.open(raw_path, "r", encoding="utf-8") as f:
+        transcript = await f.read()
 
     try:
         content = await generate_document(client, transcript, doc_type)
         doc_path = output_dir / f"{doc_type}.md"
-        doc_path.write_text(content, encoding="utf-8")
+        async with aiofiles.open(doc_path, "w", encoding="utf-8") as f:
+            await f.write(content)
 
         job = job_store.get_job(job_id)
         if job:
@@ -181,8 +187,10 @@ async def regenerate_document(
                 },
             )
     except Exception as e:
-        logger.error(f"Regeneration failed for {doc_type}: {e}")
-        raise
+        logger.exception(f"Regeneration failed for {doc_type} in job {job_id}")
+        job = job_store.get_job(job_id)
+        if job:
+            job.results[f"{doc_type}_error"] = str(e)
 
 
 async def _update(
