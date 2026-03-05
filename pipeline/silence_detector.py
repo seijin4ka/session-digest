@@ -7,25 +7,28 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-SILENCE_THRESHOLD_DB = -45.0
+# 無音判定: 平均音量と最大音量の両方が閾値以下の場合のみ無音と判定
+# ハンズオン等では静かな区間が長くても短い発話があれば有効
+SILENCE_MEAN_THRESHOLD_DB = -55.0
+SILENCE_MAX_THRESHOLD_DB = -35.0
 
+# Whisperが無音区間で生成しがちな定型フレーズ（YouTube字幕系）
+# 通常の会話で頻出するフレーズ（「お願いします」等）は含めない
 HALLUCINATION_PHRASES = [
     "ご視聴ありがとうございました",
-    "チャンネル登録",
-    "高評価",
-    "お願いします",
-    "ありがとうございました",
-    "次の動画",
-    "最後までご覧いただき",
-    "ご覧いただきありがとう",
-    "チャンネル登録よろしく",
-    "いいねボタン",
-    "家族と一緒に",
+    "チャンネル登録よろしくお願いします",
+    "高評価よろしくお願いします",
+    "最後までご覧いただきありがとうございました",
+    "チャンネル登録といいねボタン",
+    "家族と一緒に家に帰ることを願っています",
     "Amara.org",
-    "字幕は",
+    "字幕は字幕設定から",
+    "MoizMedia",
+    "Thanks for watching",
+    "Please subscribe",
 ]
 
-REPETITION_THRESHOLD = 0.5
+REPETITION_THRESHOLD = 0.6
 
 
 @dataclass
@@ -57,10 +60,11 @@ async def analyze_chunk_audio(chunk_path: Path, index: int) -> ChunkAnalysis:
     mean_volume = _parse_volume(output, "mean_volume")
     max_volume = _parse_volume(output, "max_volume")
 
-    is_silent = mean_volume < SILENCE_THRESHOLD_DB
+    # 平均音量と最大音量の両方が閾値以下の場合のみ無音と判定
+    # max_volumeが高ければ、静かな区間が長くても発話が含まれている
+    is_silent = mean_volume < SILENCE_MEAN_THRESHOLD_DB and max_volume < SILENCE_MAX_THRESHOLD_DB
 
-    if is_silent:
-        logger.info(f"Chunk {index} is silent (mean={mean_volume:.1f}dB, max={max_volume:.1f}dB)")
+    logger.info(f"Chunk {index} audio: mean={mean_volume:.1f}dB, max={max_volume:.1f}dB, silent={is_silent}")
 
     return ChunkAnalysis(
         index=index,
@@ -107,10 +111,11 @@ def check_hallucination(result: dict, chunk_duration: float = 600.0) -> Hallucin
                     reason=f"繰り返しパターンを検出: 「{most_common_text}」が{most_common_count}/{len(texts)}セグメントで出現",
                 )
 
-    # テキスト密度チェック（音声長に対して極端にテキストが少ない）
+    # テキスト密度チェック（10分チャンクで極端にテキストが少ない場合）
+    # ハンズオンでは無言の作業時間が多いため、閾値は非常に低く設定
     if segments:
         total_audio_len = max(seg.get("end", 0) for seg in segments) - min(seg.get("start", 0) for seg in segments)
-        if total_audio_len > 60 and len(text) < total_audio_len * 0.3:
+        if total_audio_len > 120 and len(text) < 10:
             return HallucinationResult(
                 is_hallucinated=True,
                 reason=f"テキスト密度が極端に低い ({len(text)}文字 / {total_audio_len:.0f}秒)",

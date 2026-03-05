@@ -15,10 +15,11 @@ Callback = Callable[[int, int], Any]
 async def transcribe_chunk(client: AsyncOpenAI, chunk_path: Path) -> dict:
     logger.info(f"Transcribing {chunk_path.name}")
     with open(chunk_path, "rb") as audio_file:
+        # languageを指定しない: Whisperが自動検出する
+        # 英語スピーカー+日本語通訳などの多言語音声に対応
         response = await client.audio.transcriptions.create(
             model="whisper-1",
             file=audio_file,
-            language="ja",
             response_format="verbose_json",
             timestamp_granularities=["segment"],
         )
