@@ -43,7 +43,7 @@ OPENAI_API_KEY=sk-... python main.py
 
 **リアルタイム進捗:** `StreamingResponse` による SSE。`JobStore` が pub/sub（`asyncio.Queue`）でイベントを配信。イベントタイプ: `progress`（進捗）、`warning`（警告バナー）、`regenerated`（再生成完了）。進捗配分: 分割 0-5%, 文字起こし 5-75%, 結合 75-80%, 生成 80-98%。
 
-**フロントエンド:** Jinja2テンプレート + vanilla JS + htmx。`index.html` がドラッグ&ドロップアップロード、`job.html` が SSE 接続とタブ切替で結果表示。
+**フロントエンド:** Jinja2テンプレート + vanilla JS + htmx。`index.html` がドラッグ&ドロップアップロード、`job.html` が SSE 接続とタブ切替で結果表示、`jobs.html` がジョブ一覧をカード形式で表示。
 
 ## 主要な設計方針
 
@@ -57,6 +57,7 @@ OPENAI_API_KEY=sk-... python main.py
 ## APIエンドポイント
 
 - `GET /` - アップロードフォーム
+- `GET /jobs` - ジョブ一覧ページ（作成日時の降順、ステータスバッジ・進捗バー付き）
 - `POST /api/upload` - ファイルアップロード → パイプライン開始
 - `GET /job/{job_id}` - ジョブ進捗ページ
 - `GET /api/jobs/{job_id}/events` - SSEストリーム

@@ -48,7 +48,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-ブラウザで http://localhost:8000 にアクセス。
+ブラウザで http://localhost:8000 にアクセス。ヘッダーの「ジョブ一覧」から過去の処理結果を確認できます。
 
 ### ローカル開発（Docker不使用）
 
