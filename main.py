@@ -81,7 +81,9 @@ async def upload(file: UploadFile = File(...)):
         file_manager.cleanup_job(job_id)
         job_store.remove_job(job_id)
         return HTMLResponse("ファイルサイズが上限(2GB)を超えています", status_code=413)
-    task = asyncio.create_task(run_pipeline(job_id, file_path, job_store, file_manager))
+    task = asyncio.create_task(
+        run_pipeline(job_id, file_path, job_store, file_manager, api_key=app_config.api_key)
+    )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return RedirectResponse(url=f"/job/{job_id}", status_code=303)
@@ -184,7 +186,9 @@ async def regenerate(job_id: str, doc_type: str):
     if doc_type not in DOCUMENT_TYPES:
         return JSONResponse({"error": "invalid doc_type"}, status_code=400)
 
-    task = asyncio.create_task(regenerate_document(job_id, doc_type, job_store, file_manager))
+    task = asyncio.create_task(
+        regenerate_document(job_id, doc_type, job_store, file_manager, api_key=app_config.api_key)
+    )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return {"status": "regenerating"}
@@ -209,13 +213,17 @@ async def set_api_key(body: ApiKeyRequest):
         return JSONResponse({"error": "APIキーは 'sk-' で始まる必要があります"}, status_code=400)
 
     try:
-        from openai import AsyncOpenAI
+        from openai import AsyncOpenAI, AuthenticationError
 
         test_client = AsyncOpenAI(api_key=key)
-        await test_client.models.list()
-    except Exception:
+        await test_client.models.retrieve("whisper-1")
+    except AuthenticationError:
         return JSONResponse(
             {"error": "APIキーが無効です。キーを確認してください。"}, status_code=401
+        )
+    except Exception:
+        return JSONResponse(
+            {"error": "OpenAI APIへの接続を確認できませんでした。"}, status_code=400
         )
 
     app_config.set_user_key(key)
