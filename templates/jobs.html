@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}ジョブ一覧 - Session Digest{% endblock %}
+
+{% block content %}
+<div class="jobs-section">
+    <h2>ジョブ一覧</h2>
+
+    {% if not jobs %}
+    <div class="empty-state">
+        <p>まだジョブがありません</p>
+        <a href="/" class="btn">音声ファイルをアップロード</a>
+    </div>
+    {% else %}
+    <div class="job-list">
+        {% for job in jobs %}
+        <a href="/job/{{ job.id }}" class="job-card">
+            <div class="job-card-header">
+                <span class="job-filename">{{ job.filename or '(不明)' }}</span>
+                <span class="status-badge status-{{ job.status.value }}">
+                    {% if job.status.value == 'completed' %}完了
+                    {% elif job.status.value == 'failed' %}失敗
+                    {% else %}処理中
+                    {% endif %}
+                </span>
+            </div>
+            <div class="job-card-meta">
+                {{ job.created_at.strftime('%Y/%m/%d %H:%M') }}
+            </div>
+            {% if job.status.value not in ('completed', 'failed') %}
+            <div class="job-card-progress">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: {{ job.progress }}%"></div>
+                </div>
+                <span class="job-card-progress-text">{{ job.progress }}%</span>
+            </div>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

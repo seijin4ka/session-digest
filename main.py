@@ -35,6 +35,15 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
+@app.get("/jobs", response_class=HTMLResponse)
+async def jobs_page(request: Request):
+    jobs = sorted(job_store.list_jobs(), key=lambda j: j.created_at, reverse=True)
+    return templates.TemplateResponse(
+        "jobs.html",
+        {"request": request, "jobs": jobs, "doc_types": DOCUMENT_TYPES},
+    )
+
+
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...)):
     content = await file.read()
