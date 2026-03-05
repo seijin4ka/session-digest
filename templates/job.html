@@ -7,7 +7,7 @@
     <h2>{{ job.filename }}</h2>
 
     <div id="progress-section" class="progress-section">
-        <div class="progress-bar-container">
+        <div class="progress-bar-container" role="progressbar" aria-valuenow="{{ job.progress }}" aria-valuemin="0" aria-valuemax="100" aria-label="処理進捗">
             <div class="progress-bar" id="progress-bar" style="width: {{ job.progress }}%"></div>
         </div>
         <div class="progress-info">
@@ -26,13 +26,13 @@
     </div>
 
     <div id="results-section" class="results-section" style="display:none;">
-        <div class="tabs">
+        <div class="tabs" role="tablist" aria-label="ドキュメントタブ">
             {% for key, label in doc_types.items() %}
-            <button class="tab-btn {% if loop.first %}active{% endif %}" data-tab="{{ key }}">{{ label }}</button>
+            <button class="tab-btn {% if loop.first %}active{% endif %}" data-tab="{{ key }}" role="tab" aria-selected="{% if loop.first %}true{% else %}false{% endif %}" aria-controls="tab-{{ key }}">{{ label }}</button>
             {% endfor %}
         </div>
         {% for key, label in doc_types.items() %}
-        <div class="tab-content {% if loop.first %}active{% endif %}" id="tab-{{ key }}">
+        <div class="tab-content {% if loop.first %}active{% endif %}" id="tab-{{ key }}" role="tabpanel">
             <div class="tab-actions">
                 <a href="/api/jobs/{{ job.id }}/download/{{ key }}" class="btn btn-download" id="download-{{ key }}">ダウンロード</a>
                 <button class="btn btn-regen" onclick="regenerate('{{ key }}')">再生成</button>
@@ -51,9 +51,13 @@ const jobId = "{{ job.id }}";
 // Tab switching
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+        });
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
+        btn.setAttribute('aria-selected', 'true');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     });
 });
@@ -72,6 +76,7 @@ evtSource.onmessage = function(event) {
         if (data.progress >= 0) {
             bar.style.width = data.progress + '%';
             text.textContent = data.progress + '%';
+            bar.parentElement.setAttribute('aria-valuenow', data.progress);
         }
         status.textContent = data.message || '';
 
@@ -102,7 +107,27 @@ evtSource.onmessage = function(event) {
     }
 };
 
+let errorCount = 0;
 evtSource.onerror = function() {
+    errorCount++;
+    if (errorCount > 5) {
+        evtSource.close();
+        // Fallback: check job status via polling
+        fetch(`/api/jobs/${jobId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'completed') {
+                    document.getElementById('progress-section').style.display = 'none';
+                    document.getElementById('results-section').style.display = 'block';
+                    loadResults();
+                } else if (data.status === 'failed') {
+                    document.getElementById('progress-section').style.display = 'none';
+                    document.getElementById('error-section').style.display = 'block';
+                    document.getElementById('error-message').textContent = data.current_step || 'Connection lost';
+                }
+            });
+        return;
+    }
     // Check if job is already completed
     fetch(`/api/jobs/${jobId}`)
         .then(r => r.json())
@@ -112,6 +137,11 @@ evtSource.onerror = function() {
                 document.getElementById('progress-section').style.display = 'none';
                 document.getElementById('results-section').style.display = 'block';
                 loadResults();
+            } else if (data.status === 'failed') {
+                evtSource.close();
+                document.getElementById('progress-section').style.display = 'none';
+                document.getElementById('error-section').style.display = 'block';
+                document.getElementById('error-message').textContent = data.current_step || 'Error occurred';
             }
         });
 };

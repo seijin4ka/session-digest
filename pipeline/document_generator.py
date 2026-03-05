@@ -17,7 +17,11 @@ PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 def _load_prompt(doc_type: str) -> str:
+    if doc_type not in DOCUMENT_TYPES:
+        raise ValueError(f"Unknown document type: {doc_type}")
     prompt_path = PROMPTS_DIR / f"{doc_type}.md"
+    if not prompt_path.exists():
+        raise FileNotFoundError(f"Prompt template not found: {prompt_path}")
     return prompt_path.read_text(encoding="utf-8")
 
 
