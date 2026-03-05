@@ -5,9 +5,10 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)](https://www.docker.com/)
 [![Docker Hub](https://img.shields.io/docker/v/seijin4ka/session-digest?label=Docker%20Hub&sort=semver)](https://hub.docker.com/r/seijin4ka/session-digest)
+[![Platforms](https://img.shields.io/badge/platform-amd64%20%7C%20arm64-lightgrey)](https://hub.docker.com/r/seijin4ka/session-digest)
 [![Issues](https://img.shields.io/github/issues/seijin4ka/session-digest)](https://github.com/seijin4ka/session-digest/issues)
 
-長時間セミナーの録音ファイルをアップロードするだけで、AIが自動的に以下の3種類のドキュメントを生成するWebアプリです。
+セミナーの録音ファイルをアップロードするだけで、AIが自動的に以下の3種類のドキュメントを生成するWebアプリです。
 
 - **構造化ノート** - トピックごとに整理されたタイムスタンプ付きノート
 - **全文書き起こし + 要約** - フィラー除去・整形済みの全文テキストと冒頭要約
@@ -94,4 +95,4 @@ MP3, M4A, WAV, WebM, MP4, OGG, FLAC, AAC
 | ドキュメント生成 | OpenAI GPT-4o |
 | 音声処理 | FFmpeg |
 | 進捗通知 | Server-Sent Events (SSE) |
-| デプロイ | Docker Compose |
+| デプロイ | Docker Compose (amd64/arm64) |

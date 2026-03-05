@@ -59,4 +59,4 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           repository: ${{ secrets.DOCKERHUB_USERNAME }}/session-digest
-          short-description: 長時間セミナー録音からAIで構造化ノート・書き起こし・手順書を自動生成
+          short-description: セミナー録音からAIで構造化ノート・書き起こし・手順書を自動生成
