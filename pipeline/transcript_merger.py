@@ -24,11 +24,13 @@ def merge_transcripts(
 
         if result.get("error"):
             offset = chunk_index * chunk_duration
-            all_segments.append(Segment(
-                start=offset,
-                end=offset + chunk_duration,
-                text=result["error"],
-            ))
+            all_segments.append(
+                Segment(
+                    start=offset,
+                    end=offset + chunk_duration,
+                    text=result["error"],
+                )
+            )
             continue
 
         offset = chunk_index * chunk_duration

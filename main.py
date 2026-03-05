@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Request, UploadFile
@@ -50,11 +49,14 @@ async def job_page(request: Request, job_id: str):
     job = job_store.get_job(job_id)
     if not job:
         return HTMLResponse("<h1>ジョブが見つかりません</h1>", status_code=404)
-    return templates.TemplateResponse("job.html", {
-        "request": request,
-        "job": job,
-        "doc_types": DOCUMENT_TYPES,
-    })
+    return templates.TemplateResponse(
+        "job.html",
+        {
+            "request": request,
+            "job": job,
+            "doc_types": DOCUMENT_TYPES,
+        },
+    )
 
 
 @app.get("/api/jobs/{job_id}/events")
@@ -67,7 +69,13 @@ async def job_events(job_id: str):
         queue = job_store.subscribe(job_id)
         try:
             # Send current state immediately
-            yield f"data: {json.dumps({'type': 'progress', 'status': job.status.value, 'progress': job.progress, 'message': job.current_step})}\n\n"
+            init_event = {
+                "type": "progress",
+                "status": job.status.value,
+                "progress": job.progress,
+                "message": job.current_step,
+            }
+            yield f"data: {json.dumps(init_event)}\n\n"
 
             while True:
                 try:
@@ -76,7 +84,7 @@ async def job_events(job_id: str):
                     if event.get("status") in (JobStatus.COMPLETED.value, JobStatus.FAILED.value):
                         break
                 except asyncio.TimeoutError:
-                    yield f": keepalive\n\n"
+                    yield ": keepalive\n\n"
         finally:
             job_store.unsubscribe(job_id, queue)
 
@@ -128,4 +136,5 @@ async def regenerate(job_id: str, doc_type: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

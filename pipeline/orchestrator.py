@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from pathlib import Path
 
@@ -19,7 +18,9 @@ from storage.job_store import JobStatus, JobStore
 
 class SilentAudioError(Exception):
     """全チャンクが無音またはハルシネーションと判定された場合のエラー。"""
+
     pass
+
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +50,14 @@ async def run_pipeline(
                     "音声が検出されませんでした。無音または作業音のみのファイルは処理できません。"
                 )
             logger.info(f"Silent chunks detected: {sorted(silent_indices)}")
-            await _warn(
-                job_store, job_id,
-                f"{len(silent_indices)}/{len(chunks)} チャンクで音声が検出されませんでした。有効な部分のみ処理します。"
+            msg = (
+                f"{len(silent_indices)}/{len(chunks)} チャンクで"
+                "音声が検出されませんでした。有効な部分のみ処理します。"
             )
+            await _warn(job_store, job_id, msg)
 
-        await _update(job_store, job_id, JobStatus.SPLITTING, 5, f"{len(chunks)}個のチャンクに分割完了")
+        msg = f"{len(chunks)}個のチャンクに分割完了"
+        await _update(job_store, job_id, JobStatus.SPLITTING, 5, msg)
 
         # Step 2: Transcribe (5-75%)
         await _update(job_store, job_id, JobStatus.TRANSCRIBING, 5, "文字起こし中...")
@@ -64,8 +67,11 @@ async def run_pipeline(
             progress = 5 + int((done / total) * 70)
             job_store.update_job(job_id, chunks_done=done)
             await _update(
-                job_store, job_id, JobStatus.TRANSCRIBING, progress,
-                f"文字起こし中... ({done}/{total})"
+                job_store,
+                job_id,
+                JobStatus.TRANSCRIBING,
+                progress,
+                f"文字起こし中... ({done}/{total})",
             )
 
         results = await transcribe_all(
@@ -73,7 +79,13 @@ async def run_pipeline(
         )
 
         # Step 2.5: Hallucination check
-        await _update(job_store, job_id, JobStatus.TRANSCRIBING, 74, "ハルシネーションチェック中...")
+        await _update(
+            job_store,
+            job_id,
+            JobStatus.TRANSCRIBING,
+            74,
+            "ハルシネーションチェック中...",
+        )
         hallucination_results = [check_hallucination(r) for r in results]
         invalid_indices, all_invalid = assess_overall_quality(analyses, hallucination_results)
 
@@ -92,8 +104,9 @@ async def run_pipeline(
         hallucinated_count = sum(1 for hr in hallucination_results if hr.is_hallucinated)
         if hallucinated_count > 0:
             await _warn(
-                job_store, job_id,
-                f"{hallucinated_count}個のチャンクでハルシネーション（架空テキスト）を検出しました。該当部分を除外して処理します。"
+                job_store,
+                job_id,
+                f"{hallucinated_count}個のチャンクでハルシネーション（架空テキスト）を検出しました。該当部分を除外して処理します。",
             )
 
         # Step 3: Merge transcripts (75-80%)
@@ -160,10 +173,13 @@ async def regenerate_document(
         if job:
             job.results[doc_type] = content
             job.results.pop(f"{doc_type}_error", None)
-            await job_store.notify(job_id, {
-                "type": "regenerated",
-                "doc_type": doc_type,
-            })
+            await job_store.notify(
+                job_id,
+                {
+                    "type": "regenerated",
+                    "doc_type": doc_type,
+                },
+            )
     except Exception as e:
         logger.error(f"Regeneration failed for {doc_type}: {e}")
         raise
@@ -177,16 +193,22 @@ async def _update(
     message: str,
 ) -> None:
     job_store.update_job(job_id, status=status, progress=progress, current_step=message)
-    await job_store.notify(job_id, {
-        "type": "progress",
-        "status": status.value,
-        "progress": progress,
-        "message": message,
-    })
+    await job_store.notify(
+        job_id,
+        {
+            "type": "progress",
+            "status": status.value,
+            "progress": progress,
+            "message": message,
+        },
+    )
 
 
 async def _warn(job_store: JobStore, job_id: str, message: str) -> None:
-    await job_store.notify(job_id, {
-        "type": "warning",
-        "message": message,
-    })
+    await job_store.notify(
+        job_id,
+        {
+            "type": "warning",
+            "message": message,
+        },
+    )

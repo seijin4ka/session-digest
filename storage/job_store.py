@@ -65,9 +65,7 @@ class JobStore:
 
     def unsubscribe(self, job_id: str, queue: asyncio.Queue) -> None:
         if job_id in self._subscribers:
-            self._subscribers[job_id] = [
-                q for q in self._subscribers[job_id] if q is not queue
-            ]
+            self._subscribers[job_id] = [q for q in self._subscribers[job_id] if q is not queue]
 
     def list_jobs(self) -> list[Job]:
         return list(self._jobs.values())

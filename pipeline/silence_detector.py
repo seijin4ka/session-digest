@@ -48,9 +48,14 @@ class HallucinationResult:
 async def analyze_chunk_audio(chunk_path: Path, index: int) -> ChunkAnalysis:
     """FFmpegのvolumedetectフィルタでチャンクの音量を解析する。"""
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-i", str(chunk_path),
-        "-af", "volumedetect",
-        "-f", "null", "-",
+        "ffmpeg",
+        "-i",
+        str(chunk_path),
+        "-af",
+        "volumedetect",
+        "-f",
+        "null",
+        "-",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -64,7 +69,9 @@ async def analyze_chunk_audio(chunk_path: Path, index: int) -> ChunkAnalysis:
     # max_volumeが高ければ、静かな区間が長くても発話が含まれている
     is_silent = mean_volume < SILENCE_MEAN_THRESHOLD_DB and max_volume < SILENCE_MAX_THRESHOLD_DB
 
-    logger.info(f"Chunk {index} audio: mean={mean_volume:.1f}dB, max={max_volume:.1f}dB, silent={is_silent}")
+    logger.info(
+        f"Chunk {index} audio: mean={mean_volume:.1f}dB, max={max_volume:.1f}dB, silent={is_silent}"
+    )
 
     return ChunkAnalysis(
         index=index,
@@ -108,13 +115,18 @@ def check_hallucination(result: dict, chunk_duration: float = 600.0) -> Hallucin
             if most_common_count / len(texts) >= REPETITION_THRESHOLD:
                 return HallucinationResult(
                     is_hallucinated=True,
-                    reason=f"繰り返しパターンを検出: 「{most_common_text}」が{most_common_count}/{len(texts)}セグメントで出現",
+                    reason=(
+                        f"繰り返しパターンを検出: 「{most_common_text}」が"
+                        f"{most_common_count}/{len(texts)}セグメントで出現"
+                    ),
                 )
 
     # テキスト密度チェック（10分チャンクで極端にテキストが少ない場合）
     # ハンズオンでは無言の作業時間が多いため、閾値は非常に低く設定
     if segments:
-        total_audio_len = max(seg.get("end", 0) for seg in segments) - min(seg.get("start", 0) for seg in segments)
+        seg_ends = [seg.get("end", 0) for seg in segments]
+        seg_starts = [seg.get("start", 0) for seg in segments]
+        total_audio_len = max(seg_ends) - min(seg_starts)
         if total_audio_len > 120 and len(text) < 10:
             return HallucinationResult(
                 is_hallucinated=True,

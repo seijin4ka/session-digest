@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -9,9 +8,12 @@ logger = logging.getLogger(__name__)
 async def get_audio_duration(input_path: Path) -> float:
     proc = await asyncio.create_subprocess_exec(
         "ffprobe",
-        "-v", "quiet",
-        "-show_entries", "format=duration",
-        "-of", "csv=p=0",
+        "-v",
+        "quiet",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "csv=p=0",
         str(input_path),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -31,7 +33,10 @@ async def split_audio(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     duration = await get_audio_duration(input_path)
-    logger.info(f"Audio duration: {duration:.1f}s, splitting into {chunk_duration}s chunks with {overlap}s overlap")
+    logger.info(
+        f"Audio duration: {duration:.1f}s, splitting into"
+        f" {chunk_duration}s chunks with {overlap}s overlap"
+    )
 
     chunks: list[Path] = []
     start = 0
@@ -43,14 +48,22 @@ async def split_audio(
         segment_duration = end - start
 
         cmd = [
-            "ffmpeg", "-y",
-            "-ss", str(start),
-            "-t", str(segment_duration),
-            "-i", str(input_path),
-            "-ac", "1",
-            "-ar", "16000",
-            "-b:a", "64k",
-            "-f", "mp3",
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(start),
+            "-t",
+            str(segment_duration),
+            "-i",
+            str(input_path),
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-b:a",
+            "64k",
+            "-f",
+            "mp3",
             str(output_path),
         ]
 
