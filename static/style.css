@@ -94,9 +94,9 @@ main {
     margin-bottom: 0.5rem;
 }
 
-.file-types {
+.drop-zone-content .file-types {
     font-size: 0.8rem;
-    color: #86868b !important;
+    color: #86868b;
 }
 
 .drop-zone input[type="file"] {
@@ -439,6 +439,12 @@ button[type="submit"]:disabled {
 @media (max-width: 600px) {
     main {
         margin: 1rem auto;
+    }
+
+    .upload-section,
+    .job-section,
+    .jobs-section {
+        padding: 1rem;
     }
 
     .tabs {
