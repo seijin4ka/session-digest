@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="api-key-section" id="api-key-section">
+    <h2>OpenAI APIキー設定</h2>
+    <div id="api-key-status"></div>
+    <div id="api-key-form" style="display:none;">
+        <div class="api-key-input-group">
+            <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off">
+            <button type="button" id="api-key-submit" class="btn-primary">設定</button>
+        </div>
+        <p class="api-key-note" id="https-warning" style="display:none;">HTTPS接続ではないため、APIキーが傍受される可能性があります。</p>
+        <p id="api-key-error" class="api-key-error" style="display:none;"></p>
+    </div>
+</div>
+
 <div class="upload-section">
     <h2>音声ファイルをアップロード</h2>
     <form action="/api/upload" method="post" enctype="multipart/form-data" id="upload-form">
@@ -71,5 +84,97 @@ form.addEventListener('submit', () => {
     submitBtn.disabled = true;
     submitBtn.textContent = 'アップロード中...';
 });
+
+// API Key management
+const apiKeySection = document.getElementById('api-key-section');
+const apiKeyStatus = document.getElementById('api-key-status');
+const apiKeyForm = document.getElementById('api-key-form');
+const apiKeyInput = document.getElementById('api-key-input');
+const apiKeySubmitBtn = document.getElementById('api-key-submit');
+const apiKeyError = document.getElementById('api-key-error');
+const httpsWarning = document.getElementById('https-warning');
+const banner = document.getElementById('api-key-banner');
+let hasApiKey = false;
+
+if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    httpsWarning.style.display = 'block';
+}
+
+async function loadApiKeyStatus() {
+    try {
+        const res = await fetch('/api/config/status');
+        const data = await res.json();
+        hasApiKey = data.has_key;
+        renderApiKeyUI(data);
+        updateSubmitButton();
+    } catch(e) {}
+}
+
+function renderApiKeyUI(data) {
+    if (data.source === 'env') {
+        apiKeyStatus.innerHTML = '<span class="badge badge--success">APIキーは環境変数で設定済みです</span>';
+        apiKeyForm.style.display = 'none';
+        banner.style.display = 'none';
+    } else if (data.source === 'web') {
+        apiKeyStatus.innerHTML = '<span class="badge badge--success">APIキーが設定されています</span> <button type="button" id="api-key-clear" class="btn-danger-sm">キーを削除</button>';
+        apiKeyForm.style.display = 'none';
+        banner.style.display = 'none';
+        document.getElementById('api-key-clear').addEventListener('click', clearApiKey);
+    } else {
+        apiKeyStatus.innerHTML = '<span class="badge badge--error">APIキーが設定されていません</span>';
+        apiKeyForm.style.display = 'block';
+        banner.className = 'api-key-banner api-key-banner--warning';
+        banner.textContent = 'OpenAI APIキーが設定されていません。下のフォームから設定してください。';
+        banner.style.display = 'block';
+    }
+}
+
+function updateSubmitButton() {
+    if (!hasApiKey) {
+        submitBtn.disabled = true;
+    }
+}
+
+apiKeySubmitBtn.addEventListener('click', async () => {
+    const key = apiKeyInput.value.trim();
+    if (!key) return;
+    apiKeyError.style.display = 'none';
+    apiKeySubmitBtn.disabled = true;
+    apiKeySubmitBtn.textContent = '確認中...';
+    try {
+        const res = await fetch('/api/config/api-key', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({api_key: key}),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            apiKeyError.textContent = data.error;
+            apiKeyError.style.display = 'block';
+        } else {
+            apiKeyInput.value = '';
+            await loadApiKeyStatus();
+        }
+    } catch(e) {
+        apiKeyError.textContent = '接続エラーが発生しました';
+        apiKeyError.style.display = 'block';
+    } finally {
+        apiKeySubmitBtn.disabled = false;
+        apiKeySubmitBtn.textContent = '設定';
+    }
+});
+
+apiKeyInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') apiKeySubmitBtn.click();
+});
+
+async function clearApiKey() {
+    try {
+        const res = await fetch('/api/config/api-key', {method: 'DELETE'});
+        if (res.ok) await loadApiKeyStatus();
+    } catch(e) {}
+}
+
+loadApiKeyStatus();
 </script>
 {% endblock %}

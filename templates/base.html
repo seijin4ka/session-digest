@@ -14,8 +14,23 @@
         </nav>
         <p class="tagline">セミナー録音を構造化ドキュメントに変換</p>
     </header>
+    <div id="api-key-banner" class="api-key-banner" style="display:none;"></div>
     <main>
         {% block content %}{% endblock %}
     </main>
+    <script>
+    (async function() {
+        const banner = document.getElementById('api-key-banner');
+        try {
+            const res = await fetch('/api/config/status');
+            const data = await res.json();
+            if (!data.has_key) {
+                banner.className = 'api-key-banner api-key-banner--warning';
+                banner.textContent = 'OpenAI APIキーが設定されていません。トップページから設定してください。';
+                banner.style.display = 'block';
+            }
+        } catch(e) {}
+    })();
+    </script>
 </body>
 </html>

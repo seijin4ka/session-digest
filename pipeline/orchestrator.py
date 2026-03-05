@@ -4,6 +4,7 @@ from pathlib import Path
 import aiofiles
 from openai import AsyncOpenAI
 
+from config import app_config
 from pipeline.audio_splitter import split_audio
 from pipeline.document_generator import generate_all
 from pipeline.silence_detector import (
@@ -32,7 +33,10 @@ async def run_pipeline(
     job_store: JobStore,
     file_manager: FileManager,
 ) -> None:
-    client = AsyncOpenAI()
+    api_key = app_config.api_key
+    if not api_key:
+        raise ValueError("OpenAI APIキーが設定されていません")
+    client = AsyncOpenAI(api_key=api_key)
 
     try:
         # Step 1: Split audio (0-5%)
@@ -158,7 +162,10 @@ async def regenerate_document(
 ) -> None:
     from pipeline.document_generator import generate_document
 
-    client = AsyncOpenAI()
+    api_key = app_config.api_key
+    if not api_key:
+        raise ValueError("OpenAI APIキーが設定されていません")
+    client = AsyncOpenAI(api_key=api_key)
     output_dir = file_manager.get_output_dir(job_id)
     raw_path = output_dir / "raw_transcript.md"
 
