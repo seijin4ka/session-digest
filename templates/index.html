@@ -4,17 +4,17 @@
 <div class="upload-section">
     <h2>音声ファイルをアップロード</h2>
     <form action="/api/upload" method="post" enctype="multipart/form-data" id="upload-form">
-        <div class="drop-zone" id="drop-zone">
+        <div class="drop-zone" id="drop-zone" role="button" tabindex="0" aria-label="音声ファイルを選択するにはクリックまたはドラッグ＆ドロップ">
             <div class="drop-zone-content">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="17 8 12 3 7 8"/>
                     <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
                 <p>ファイルをドラッグ＆ドロップ<br>またはクリックして選択</p>
-                <p class="file-types">対応形式: MP3, M4A, WAV, WebM, MP4</p>
+                <p class="file-types">対応形式: MP3, M4A, WAV, WebM, MP4, OGG, FLAC, AAC</p>
             </div>
-            <input type="file" name="file" id="file-input" accept=".mp3,.m4a,.wav,.webm,.mp4" required>
+            <input type="file" name="file" id="file-input" accept=".mp3,.m4a,.wav,.webm,.mp4,.ogg,.flac,.aac" required aria-label="音声ファイル">
         </div>
         <div id="file-info" class="file-info" style="display:none;">
             <span id="file-name"></span>

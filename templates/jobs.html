@@ -29,7 +29,7 @@
             </div>
             {% if job.status.value not in ('completed', 'failed') %}
             <div class="job-card-progress">
-                <div class="progress-bar-container">
+                <div class="progress-bar-container" role="progressbar" aria-valuenow="{{ job.progress }}" aria-valuemin="0" aria-valuemax="100" aria-label="処理進捗">
                     <div class="progress-bar" style="width: {{ job.progress }}%"></div>
                 </div>
                 <span class="job-card-progress-text">{{ job.progress }}%</span>

@@ -5,14 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Session Digest{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css">
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
 </head>
 <body>
     <header>
-        <div class="header-nav">
+        <nav class="header-nav" aria-label="メインナビゲーション">
             <a href="/" class="logo">Session Digest</a>
             <a href="/jobs" class="nav-link">ジョブ一覧</a>
-        </div>
+        </nav>
         <p class="tagline">セミナー録音を構造化ドキュメントに変換</p>
     </header>
     <main>
