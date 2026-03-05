@@ -64,21 +64,19 @@ async def upload(file: UploadFile = File(...)):
             status_code=400,
         )
 
-    # Read in chunks to avoid loading entire file into memory at once
-    chunks = []
-    total_size = 0
-    while True:
-        chunk = await file.read(1024 * 1024)  # 1MB chunks
-        if not chunk:
-            break
-        total_size += len(chunk)
-        if total_size > MAX_UPLOAD_SIZE:
-            return HTMLResponse("ファイルサイズが上限(2GB)を超えています", status_code=413)
-        chunks.append(chunk)
-    content = b"".join(chunks)
+    # Check file size via Content-Length header if available
+    if file.size and file.size > MAX_UPLOAD_SIZE:
+        return HTMLResponse("ファイルサイズが上限(2GB)を超えています", status_code=413)
 
     job_id = job_store.create_job(filename=filename)
-    file_path = await file_manager.save_upload(job_id, filename, content)
+    file_path = await file_manager.save_upload_stream(job_id, filename, file)
+
+    # Verify actual file size after streaming
+    actual_size = file_path.stat().st_size
+    if actual_size > MAX_UPLOAD_SIZE:
+        file_manager.cleanup_job(job_id)
+        job_store.remove_job(job_id)
+        return HTMLResponse("ファイルサイズが上限(2GB)を超えています", status_code=413)
     task = asyncio.create_task(run_pipeline(job_id, file_path, job_store, file_manager))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
@@ -159,6 +157,8 @@ async def job_status(job_id: str):
 async def download_document(job_id: str, doc_type: str):
     if doc_type not in DOCUMENT_TYPES:
         return HTMLResponse("Invalid document type", status_code=400)
+    if not job_store.get_job(job_id):
+        return HTMLResponse("Job not found", status_code=404)
     output_dir = file_manager.get_output_dir(job_id)
     file_path = output_dir / f"{doc_type}.md"
     if not file_path.exists():

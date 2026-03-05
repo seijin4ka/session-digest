@@ -31,14 +31,16 @@ class FileManager:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    async def save_upload(self, job_id: str, filename: str, content: bytes) -> Path:
+    async def save_upload_stream(self, job_id: str, filename: str, upload_file) -> Path:
+        """UploadFileからストリーミングでファイルに保存する。メモリ効率が良い。"""
         job_dir = self.get_job_dir(job_id)
         safe_filename = Path(filename).name
         if not safe_filename:
             safe_filename = "upload"
         file_path = job_dir / safe_filename
         async with aiofiles.open(file_path, "wb") as f:
-            await f.write(content)
+            while chunk := await upload_file.read(1024 * 1024):
+                await f.write(chunk)
         return file_path
 
     def cleanup_chunks(self, job_id: str) -> None:
