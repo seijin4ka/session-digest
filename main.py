@@ -14,7 +14,9 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
+from config import app_config
 from pipeline.document_generator import DOCUMENT_TYPES
 from pipeline.orchestrator import regenerate_document, run_pipeline
 from storage.file_manager import FileManager
@@ -56,6 +58,8 @@ MAX_UPLOAD_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
 
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...)):
+    if not app_config.has_any_key:
+        return JSONResponse({"error": "OpenAI APIキーが設定されていません"}, status_code=400)
     filename = file.filename or "upload"
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -77,7 +81,9 @@ async def upload(file: UploadFile = File(...)):
         file_manager.cleanup_job(job_id)
         job_store.remove_job(job_id)
         return HTMLResponse("ファイルサイズが上限(2GB)を超えています", status_code=413)
-    task = asyncio.create_task(run_pipeline(job_id, file_path, job_store, file_manager))
+    task = asyncio.create_task(
+        run_pipeline(job_id, file_path, job_store, file_manager, api_key=app_config.api_key)
+    )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return RedirectResponse(url=f"/job/{job_id}", status_code=303)
@@ -172,16 +178,66 @@ async def download_document(job_id: str, doc_type: str):
 
 @app.post("/api/jobs/{job_id}/regenerate/{doc_type}")
 async def regenerate(job_id: str, doc_type: str):
+    if not app_config.has_any_key:
+        return JSONResponse({"error": "OpenAI APIキーが設定されていません"}, status_code=400)
     job = job_store.get_job(job_id)
     if not job:
         return JSONResponse({"error": "not found"}, status_code=404)
     if doc_type not in DOCUMENT_TYPES:
         return JSONResponse({"error": "invalid doc_type"}, status_code=400)
 
-    task = asyncio.create_task(regenerate_document(job_id, doc_type, job_store, file_manager))
+    task = asyncio.create_task(
+        regenerate_document(job_id, doc_type, job_store, file_manager, api_key=app_config.api_key)
+    )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return {"status": "regenerating"}
+
+
+class ApiKeyRequest(BaseModel):
+    api_key: str
+
+
+@app.get("/api/config/status")
+async def config_status():
+    return {
+        "has_key": app_config.has_any_key,
+        "source": app_config.source,
+    }
+
+
+@app.post("/api/config/api-key")
+async def set_api_key(body: ApiKeyRequest):
+    key = body.api_key.strip()
+    if not key.startswith("sk-"):
+        return JSONResponse({"error": "APIキーは 'sk-' で始まる必要があります"}, status_code=400)
+
+    try:
+        from openai import AsyncOpenAI, AuthenticationError
+
+        test_client = AsyncOpenAI(api_key=key)
+        await test_client.models.retrieve("whisper-1")
+    except AuthenticationError:
+        return JSONResponse(
+            {"error": "APIキーが無効です。キーを確認してください。"}, status_code=401
+        )
+    except Exception:
+        return JSONResponse(
+            {"error": "OpenAI APIへの接続を確認できませんでした。"}, status_code=400
+        )
+
+    app_config.set_user_key(key)
+    return {"status": "ok", "source": "web"}
+
+
+@app.delete("/api/config/api-key")
+async def delete_api_key():
+    app_config.clear_user_key()
+    return {
+        "status": "ok",
+        "has_key": app_config.has_any_key,
+        "source": app_config.source,
+    }
 
 
 if __name__ == "__main__":
