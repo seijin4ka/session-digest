@@ -166,12 +166,14 @@ async def regenerate_document(
         logger.error(f"Raw transcript not found for job {job_id}")
         return
 
-    transcript = raw_path.read_text(encoding="utf-8")
+    async with aiofiles.open(raw_path, "r", encoding="utf-8") as f:
+        transcript = await f.read()
 
     try:
         content = await generate_document(client, transcript, doc_type)
         doc_path = output_dir / f"{doc_type}.md"
-        doc_path.write_text(content, encoding="utf-8")
+        async with aiofiles.open(doc_path, "w", encoding="utf-8") as f:
+            await f.write(content)
 
         job = job_store.get_job(job_id)
         if job:
