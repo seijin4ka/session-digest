@@ -33,12 +33,12 @@ async def run_pipeline(
     job_store: JobStore,
     file_manager: FileManager,
 ) -> None:
-    api_key = app_config.api_key
-    if not api_key:
-        raise ValueError("OpenAI APIキーが設定されていません")
-    client = AsyncOpenAI(api_key=api_key)
-
     try:
+        api_key = app_config.api_key
+        if not api_key:
+            raise ValueError("OpenAI APIキーが設定されていません")
+        client = AsyncOpenAI(api_key=api_key)
+
         # Step 1: Split audio (0-5%)
         await _update(job_store, job_id, JobStatus.SPLITTING, 0, "音声ファイルを分割中...")
         chunks_dir = file_manager.get_chunks_dir(job_id)
@@ -162,16 +162,21 @@ async def regenerate_document(
 ) -> None:
     from pipeline.document_generator import generate_document
 
-    api_key = app_config.api_key
-    if not api_key:
-        raise ValueError("OpenAI APIキーが設定されていません")
-    client = AsyncOpenAI(api_key=api_key)
     output_dir = file_manager.get_output_dir(job_id)
     raw_path = output_dir / "raw_transcript.md"
 
     if not raw_path.exists():
         logger.error(f"Raw transcript not found for job {job_id}")
         return
+
+    api_key = app_config.api_key
+    if not api_key:
+        logger.error(f"API key not configured for regeneration of {doc_type} in job {job_id}")
+        job = job_store.get_job(job_id)
+        if job:
+            job.results[f"{doc_type}_error"] = "OpenAI APIキーが設定されていません"
+        return
+    client = AsyncOpenAI(api_key=api_key)
 
     async with aiofiles.open(raw_path, "r", encoding="utf-8") as f:
         transcript = await f.read()

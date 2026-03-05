@@ -77,7 +77,7 @@ function updateFileInfo(file) {
     const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
     fileSize.textContent = `(${sizeMB} MB)`;
     fileInfo.style.display = 'flex';
-    submitBtn.disabled = false;
+    submitBtn.disabled = !hasApiKey;
 }
 
 form.addEventListener('submit', () => {
