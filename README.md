@@ -15,7 +15,7 @@
 
 4時間超のハンズオンセミナーにも対応。英語スピーカー+日本語通訳などの多言語音声も自動検出して処理します。
 
-![Session Digest スクリーンショット](screen.png)
+![Session Digest スクリーンショット](https://raw.githubusercontent.com/seijin4ka/session-digest/main/screen.png)
 
 ## 仕組み
 
