@@ -1,12 +1,14 @@
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
+    JSONResponse,
     RedirectResponse,
     StreamingResponse,
 )
@@ -18,6 +20,8 @@ from pipeline.orchestrator import regenerate_document, run_pipeline
 from storage.file_manager import FileManager
 from storage.job_store import JobStatus, JobStore
 
+ALLOWED_EXTENSIONS = {".mp3", ".m4a", ".wav", ".webm", ".mp4", ".ogg", ".flac", ".aac"}
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +32,9 @@ templates = Jinja2Templates(directory="templates")
 
 job_store = JobStore()
 file_manager = FileManager()
+
+# Keep references to background tasks to prevent garbage collection
+_background_tasks: set[asyncio.Task] = set()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -44,12 +51,37 @@ async def jobs_page(request: Request):
     )
 
 
+MAX_UPLOAD_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
+
+
 @app.post("/api/upload")
 async def upload(file: UploadFile = File(...)):
-    content = await file.read()
-    job_id = job_store.create_job(filename=file.filename)
-    file_path = await file_manager.save_upload(job_id, file.filename, content)
-    asyncio.create_task(run_pipeline(job_id, file_path, job_store, file_manager))
+    filename = file.filename or "upload"
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return HTMLResponse(
+            f"対応していないファイル形式です。対応形式: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+            status_code=400,
+        )
+
+    # Read in chunks to avoid loading entire file into memory at once
+    chunks = []
+    total_size = 0
+    while True:
+        chunk = await file.read(1024 * 1024)  # 1MB chunks
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > MAX_UPLOAD_SIZE:
+            return HTMLResponse("ファイルサイズが上限(2GB)を超えています", status_code=413)
+        chunks.append(chunk)
+    content = b"".join(chunks)
+
+    job_id = job_store.create_job(filename=filename)
+    file_path = await file_manager.save_upload(job_id, filename, content)
+    task = asyncio.create_task(run_pipeline(job_id, file_path, job_store, file_manager))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return RedirectResponse(url=f"/job/{job_id}", status_code=303)
 
 
@@ -77,14 +109,19 @@ async def job_events(job_id: str):
     async def event_stream():
         queue = job_store.subscribe(job_id)
         try:
-            # Send current state immediately
+            # Re-fetch job state after subscribing to avoid race condition
+            current_job = job_store.get_job(job_id)
             init_event = {
                 "type": "progress",
-                "status": job.status.value,
-                "progress": job.progress,
-                "message": job.current_step,
+                "status": current_job.status.value,
+                "progress": current_job.progress,
+                "message": current_job.current_step,
             }
             yield f"data: {json.dumps(init_event)}\n\n"
+
+            # If job already finished, stop immediately
+            if current_job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                return
 
             while True:
                 try:
@@ -104,7 +141,7 @@ async def job_events(job_id: str):
 async def job_status(job_id: str):
     job = job_store.get_job(job_id)
     if not job:
-        return {"error": "not found"}
+        return JSONResponse({"error": "not found"}, status_code=404)
     return {
         "id": job.id,
         "status": job.status.value,
@@ -120,6 +157,8 @@ async def job_status(job_id: str):
 
 @app.get("/api/jobs/{job_id}/download/{doc_type}")
 async def download_document(job_id: str, doc_type: str):
+    if doc_type not in DOCUMENT_TYPES:
+        return HTMLResponse("Invalid document type", status_code=400)
     output_dir = file_manager.get_output_dir(job_id)
     file_path = output_dir / f"{doc_type}.md"
     if not file_path.exists():
@@ -135,11 +174,13 @@ async def download_document(job_id: str, doc_type: str):
 async def regenerate(job_id: str, doc_type: str):
     job = job_store.get_job(job_id)
     if not job:
-        return {"error": "not found"}
+        return JSONResponse({"error": "not found"}, status_code=404)
     if doc_type not in DOCUMENT_TYPES:
-        return {"error": "invalid doc_type"}
+        return JSONResponse({"error": "invalid doc_type"}, status_code=400)
 
-    asyncio.create_task(regenerate_document(job_id, doc_type, job_store, file_manager))
+    task = asyncio.create_task(regenerate_document(job_id, doc_type, job_store, file_manager))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return {"status": "regenerating"}
 
 

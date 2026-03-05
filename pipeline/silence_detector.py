@@ -81,13 +81,19 @@ async def analyze_chunk_audio(chunk_path: Path, index: int) -> ChunkAnalysis:
     )
 
 
-async def analyze_chunks(chunks: list[Path]) -> list[ChunkAnalysis]:
-    """全チャンクの音声レベルを並列解析する。"""
-    tasks = [analyze_chunk_audio(chunk, i) for i, chunk in enumerate(chunks)]
-    return await asyncio.gather(*tasks)
+async def analyze_chunks(chunks: list[Path], max_concurrent: int = 5) -> list[ChunkAnalysis]:
+    """全チャンクの音声レベルを並列解析する（並列度制限付き）。"""
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def _limited(chunk: Path, index: int) -> ChunkAnalysis:
+        async with semaphore:
+            return await analyze_chunk_audio(chunk, index)
+
+    tasks = [_limited(chunk, i) for i, chunk in enumerate(chunks)]
+    return list(await asyncio.gather(*tasks))
 
 
-def check_hallucination(result: dict, chunk_duration: float = 600.0) -> HallucinationResult:
+def check_hallucination(result: dict) -> HallucinationResult:
     """Whisper出力のハルシネーションを検査する。"""
     if result.get("skipped") or result.get("error"):
         return HallucinationResult(is_hallucinated=False)

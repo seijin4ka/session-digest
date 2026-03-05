@@ -1,8 +1,11 @@
 import asyncio
+import logging
 import shutil
 from pathlib import Path
 
 import aiofiles
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path("/tmp/session-digest")
 
@@ -11,6 +14,7 @@ class FileManager:
     def __init__(self, base_dir: Path = BASE_DIR):
         self.base_dir = base_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
+        self._cleanup_tasks: set[asyncio.Task] = set()
 
     def get_job_dir(self, job_id: str) -> Path:
         path = self.base_dir / job_id
@@ -29,7 +33,10 @@ class FileManager:
 
     async def save_upload(self, job_id: str, filename: str, content: bytes) -> Path:
         job_dir = self.get_job_dir(job_id)
-        file_path = job_dir / filename
+        safe_filename = Path(filename).name
+        if not safe_filename:
+            safe_filename = "upload"
+        file_path = job_dir / safe_filename
         async with aiofiles.open(file_path, "wb") as f:
             await f.write(content)
         return file_path
@@ -44,9 +51,16 @@ class FileManager:
         if job_dir.exists():
             shutil.rmtree(job_dir)
 
-    def schedule_cleanup(self, job_id: str, delay: int = 86400) -> None:
+    def schedule_cleanup(self, job_id: str, delay: int = 86400, job_store=None) -> None:
         async def _delayed_cleanup():
             await asyncio.sleep(delay)
-            self.cleanup_job(job_id)
+            try:
+                self.cleanup_job(job_id)
+            except Exception:
+                logger.exception(f"Failed to cleanup job directory for {job_id}")
+            if job_store is not None:
+                job_store.remove_job(job_id)
 
-        asyncio.create_task(_delayed_cleanup())
+        task = asyncio.create_task(_delayed_cleanup())
+        self._cleanup_tasks.add(task)
+        task.add_done_callback(self._cleanup_tasks.discard)
