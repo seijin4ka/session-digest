@@ -4,6 +4,7 @@
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)](https://www.docker.com/)
+[![Docker Hub](https://img.shields.io/docker/v/seijin4ka/session-digest?label=Docker%20Hub&sort=semver)](https://hub.docker.com/r/seijin4ka/session-digest)
 [![Issues](https://img.shields.io/github/issues/seijin4ka/session-digest)](https://github.com/seijin4ka/session-digest/issues)
 
 長時間セミナーの録音ファイルをアップロードするだけで、AIが自動的に以下の3種類のドキュメントを生成するWebアプリです。
