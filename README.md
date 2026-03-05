@@ -49,15 +49,25 @@ Whisper APIは無音区間に対して架空のテキストを生成すること
 ### 起動
 
 ```bash
-# APIキーを設定
-cp .env.example .env
-# .env を編集して OPENAI_API_KEY を設定
-
-# ビルド & 起動
+# ビルド & 起動（.env ファイルは不要）
 docker compose up --build
 ```
 
-ブラウザで http://localhost:8000 にアクセス。ヘッダーの「ジョブ一覧」から過去の処理結果を確認できます。
+ブラウザで http://localhost:8000 にアクセス。Web UIからAPIキーを設定して利用開始できます。
+
+#### APIキーの設定方法
+
+**方法1: Web UIから設定（推奨）**
+起動後にブラウザでアクセスし、トップページのフォームからAPIキーを入力するだけで利用開始できます。
+
+**方法2: 環境変数で設定**
+```bash
+cp .env.example .env
+# .env を編集して OPENAI_API_KEY を設定
+docker compose up --build
+```
+
+環境変数で設定済みの場合はWeb UIでの設定は不要です。両方設定した場合はWeb UIの設定が優先されます。
 
 ### ローカル開発（Docker不使用）
 
@@ -67,6 +77,7 @@ brew install ffmpeg  # macOS
 
 pip install -r requirements.txt
 python main.py
+# ブラウザからAPIキーを設定、または OPENAI_API_KEY 環境変数を設定
 ```
 
 ## 対応フォーマット

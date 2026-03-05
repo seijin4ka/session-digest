@@ -13,7 +13,7 @@ pip install -r requirements.txt
 OPENAI_API_KEY=sk-... python main.py
 ```
 
-環境変数: `.env` に `OPENAI_API_KEY` のみ（python-dotenv で読み込み）。リンター: `ruff check .` + `ruff format --check .`（CI で自動実行）。
+環境変数: `.env` に `OPENAI_API_KEY`（オプション、python-dotenv で読み込み）。Web UIからもAPIキー設定可能（`.env` なしで起動可）。リンター: `ruff check .` + `ruff format --check .`（CI で自動実行）。
 
 ## アーキテクチャ
 
@@ -24,8 +24,9 @@ OPENAI_API_KEY=sk-... python main.py
 → ハルシネーション検出 → 結合 → GPT-4o生成 → ダウンロード
 ```
 
-**2つのレイヤー:**
-- `pipeline/` - 処理ステージ群。各モジュールは非同期。`orchestrator.py` がチェーンして進捗イベントを発行する。
+**3つのレイヤー:**
+- `config.py` - APIキー状態管理シングルトン。環境変数（`OPENAI_API_KEY`）とWeb UI設定のどちらからもキーを取得。Web UI設定が優先。インメモリ保持（プロセス再起動でクリア）。
+- `pipeline/` - 処理ステージ群。各モジュールは非同期。`orchestrator.py` がチェーンして進捗イベントを発行する。APIキーはタスク作成時にスナップショットされ引数で渡される。
 - `storage/` - インメモリのジョブ状態（`dict`）と `/tmp/session-digest/{jobId}/` 配下の一時ファイル管理。
 
 **パイプラインの流れ（`orchestrator.run_pipeline`）:**
@@ -43,7 +44,7 @@ OPENAI_API_KEY=sk-... python main.py
 
 **リアルタイム進捗:** `StreamingResponse` による SSE。`JobStore` が pub/sub（`asyncio.Queue`）でイベントを配信。イベントタイプ: `progress`（進捗）、`warning`（警告バナー）、`regenerated`（再生成完了）。進捗配分: 分割 0-5%, 文字起こし 5-75%, 結合 75-80%, 生成 80-98%。
 
-**フロントエンド:** Jinja2テンプレート + vanilla JS。`index.html` がドラッグ&ドロップアップロード、`job.html` が SSE 接続とタブ切替で結果表示、`jobs.html` がジョブ一覧をカード形式で表示。JS内の変数埋め込みは `tojson` フィルタで XSS 対策済み。
+**フロントエンド:** Jinja2テンプレート + vanilla JS。`index.html` がAPIキー設定UI+ドラッグ&ドロップアップロード、`job.html` が SSE 接続とタブ切替で結果表示、`jobs.html` がジョブ一覧をカード形式で表示。`base.html` にAPIキー未設定時の警告バナーを全ページ共通で表示。JS内の変数埋め込みは `tojson` フィルタで XSS 対策済み。
 
 ## 主要な設計方針
 
@@ -62,6 +63,7 @@ OPENAI_API_KEY=sk-... python main.py
 - Docker: 非rootユーザー(appuser)で実行、`.dockerignore` で `.env` 除外
 - エラーメッセージ: 内部例外の詳細はクライアントに送信しない（サーバーログのみ）
 - `asyncio.create_task()` のタスク参照を `set` で保持しGC回収を防止
+- APIキー: フロントエンドにキー値を返さない（`/api/config/status` は `has_key` と `source` のみ）。インメモリ保持で永続化しない。タスク作成時にスナップショットして渡し、処理中のキー変更による競合を防止
 
 ## APIエンドポイント
 
@@ -73,3 +75,6 @@ OPENAI_API_KEY=sk-... python main.py
 - `GET /api/jobs/{job_id}` - ジョブ状態JSON
 - `GET /api/jobs/{job_id}/download/{doc_type}` - ドキュメントダウンロード
 - `POST /api/jobs/{job_id}/regenerate/{doc_type}` - ドキュメント個別再生成
+- `GET /api/config/status` - APIキー設定状態（`has_key`, `source`）
+- `POST /api/config/api-key` - Web UIからAPIキー設定（疎通確認付き）
+- `DELETE /api/config/api-key` - Web UI設定のAPIキーを削除
