@@ -41,15 +41,16 @@ _background_tasks: set[asyncio.Task] = set()
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/jobs", response_class=HTMLResponse)
 async def jobs_page(request: Request):
     jobs = sorted(job_store.list_jobs(), key=lambda j: j.created_at, reverse=True)
     return templates.TemplateResponse(
+        request,
         "jobs.html",
-        {"request": request, "jobs": jobs, "doc_types": DOCUMENT_TYPES},
+        {"jobs": jobs, "doc_types": DOCUMENT_TYPES},
     )
 
 
@@ -95,9 +96,9 @@ async def job_page(request: Request, job_id: str):
     if not job:
         return HTMLResponse("<h1>ジョブが見つかりません</h1>", status_code=404)
     return templates.TemplateResponse(
+        request,
         "job.html",
         {
-            "request": request,
             "job": job,
             "doc_types": DOCUMENT_TYPES,
         },
